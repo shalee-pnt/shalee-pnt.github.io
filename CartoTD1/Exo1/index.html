@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TD1 - Exo1 : Géolocalisation</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; background: #fafafa; }
+    h1 { font-size: 1.3rem; }
+    h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+    .bloc { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    td { padding: 4px 8px; border-bottom: 1px solid #eee; }
+    td:first-child { color: #555; width: 45%; }
+    .erreur { color: #b00; }
+    button { padding: 8px 14px; margin-right: 8px; }
+    a { display: inline-block; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Exercice 1 - Accès à la géolocalisation</h1>
+
+  <div>
+    <button id="btnStop">Arrêter le suivi (watchPosition)</button>
+  </div>
+
+  <h2>Position ponctuelle (getCurrentPosition)</h2>
+  <div class="bloc" id="blocCurrent">En attente...</div>
+
+  <h2>Suivi en continu (watchPosition)</h2>
+  <div class="bloc" id="blocWatch">En attente...</div>
+
+  <a href="../">Retour</a>
+
+  <script>
+    // options communes 
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    };
+
+    // tableau lisible à partir d'un objet Position
+    function afficherPosition(position) {
+      const c = position.coords;
+      const date = new Date(position.timestamp); //timestamp en ms
+
+      const lignes = [
+        ["Latitude", c.latitude + " °"],
+        ["Longitude", c.longitude + " °"],
+        ["Altitude", c.altitude === null ? "non disponible" : c.altitude.toFixed(1) + " m"],
+        ["Précision (position)", c.accuracy.toFixed(1) + " m"],
+        ["Précision (altitude)", c.altitudeAccuracy === null ? "non disponible" : c.altitudeAccuracy.toFixed(1) + " m"],
+        ["Vitesse", c.speed === null ? "non disponible" : (c.speed * 3.6).toFixed(1) + " km/h"],
+        ["Date de la mesure", date.toLocaleString("fr-FR")]
+      ];
+
+      let html = "<table>";
+      for (const [nom, valeur] of lignes) {
+        html += "<tr><td>" + nom + "</td><td>" + valeur + "</td></tr>";
+      }
+      html += "</table>";
+      return html;
+    }
+
+    function messageErreur(err) {
+      // codes erreur de l'API : 1 permission, 2 indisponible, 3 timeout
+      return "<span class='erreur'>Erreur " + err.code + " : " + err.message + "</span>";
+    }
+
+    const blocCurrent = document.getElementById("blocCurrent");
+    const blocWatch = document.getElementById("blocWatch");
+
+    if (!navigator.geolocation) {
+      blocCurrent.innerHTML = "<span class='erreur'>La géolocalisation n'est pas supportée par ce navigateur.</span>";
+      blocWatch.innerHTML = blocCurrent.innerHTML;
+    } else {
+      // 1) une seule mesure
+      navigator.geolocation.getCurrentPosition(
+        function (position) {
+          blocCurrent.innerHTML = afficherPosition(position);
+        },
+        function (err) {
+          blocCurrent.innerHTML = messageErreur(err);
+        },
+        options
+      );
+
+      // 2) suivi : le callback est rappelé à chaque nouvelle position
+      const watchId = navigator.geolocation.watchPosition(
+        function (position) {
+          blocWatch.innerHTML = afficherPosition(position);
+        },
+        function (err) {
+          blocWatch.innerHTML = messageErreur(err);
+        },
+        options
+      );
+
+      document.getElementById("btnStop").addEventListener("click", function () {
+        navigator.geolocation.clearWatch(watchId);
+        blocWatch.innerHTML += "<p>Suivi arrêté.</p>";
+      });
+    }
+  </script>
+</body>
+</html>
