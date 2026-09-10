@@ -8,6 +8,7 @@
     body { font-family: Arial, sans-serif; margin: 16px; background: #fafafa; }
     h1 { font-size: 1.3rem; }
     h2 { font-size: 1.1rem; margin-top: 1.5rem; }
+    h3 { font-size: 1rem; margin-bottom: 4px; }
     .bloc { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
     table { border-collapse: collapse; width: 100%; }
     td { padding: 4px 8px; border-bottom: 1px solid #eee; }
@@ -29,6 +30,15 @@
 
   <h2>Suivi en continu (watchPosition)</h2>
   <div class="bloc" id="blocWatch">En attente...</div>
+
+  <h2>Capteurs</h2>
+  <button id="btnCapteurs">Activer les capteurs</button>
+
+  <h3>Orientation (DeviceOrientation)</h3>
+  <div class="bloc" id="blocOrientation">En attente...</div>
+
+  <h3>Mouvement (DeviceMotion)</h3>
+  <div class="bloc" id="blocMotion">En attente...</div>
 
   <a href="../">Retour</a>
 
@@ -102,6 +112,72 @@
         blocWatch.innerHTML += "<p>Suivi arrêté.</p>";
       });
     }
+
+
+    //DeviceOrientation et DeviceMotion
+
+    const blocOrientation = document.getElementById("blocOrientation");
+    const blocMotion = document.getElementById("blocMotion");
+
+    //formater un nombre qui peut être null
+    function num(v) {
+      return (v === null || v === undefined) ? "non disponible" : v.toFixed(2);
+    }
+
+    function tableau(lignes) {
+      let html = "<table>";
+      for (const [nom, valeur] of lignes) {
+        html += "<tr><td>" + nom + "</td><td>" + valeur + "</td></tr>";
+      }
+      return html + "</table>";
+    }
+
+    function onOrientation(e) {
+      // alpha : rotation autour de l'axe z (boussole), beta : avant/arrière, gamma : gauche/droite
+      blocOrientation.innerHTML = tableau([
+        ["alpha (°)", num(e.alpha)],
+        ["beta (°)", num(e.beta)],
+        ["gamma (°)", num(e.gamma)],
+        ["absolue ?", e.absolute]
+      ]);
+    }
+
+    function onMotion(e) {
+      const a = e.acceleration || {};
+      const ag = e.accelerationIncludingGravity || {};
+      const r = e.rotationRate || {};
+      blocMotion.innerHTML = tableau([
+        ["accélération x / y / z (m/s²)", num(a.x) + " / " + num(a.y) + " / " + num(a.z)],
+        ["avec gravité x / y / z (m/s²)", num(ag.x) + " / " + num(ag.y) + " / " + num(ag.z)],
+        ["vitesse de rotation alpha / beta / gamma (°/s)", num(r.alpha) + " / " + num(r.beta) + " / " + num(r.gamma)],
+        ["intervalle (ms)", num(e.interval)]
+      ]);
+    }
+
+    function activerCapteurs() {
+      if (typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function") {
+        DeviceOrientationEvent.requestPermission().then(function (reponse) {
+          if (reponse === "granted") {
+            window.addEventListener("deviceorientation", onOrientation);
+          } else {
+            blocOrientation.innerHTML = "<span class='erreur'>Permission refusée.</span>";
+          }
+        });
+        DeviceMotionEvent.requestPermission().then(function (reponse) {
+          if (reponse === "granted") {
+            window.addEventListener("devicemotion", onMotion);
+          } else {
+            blocMotion.innerHTML = "<span class='erreur'>Permission refusée.</span>";
+          }
+        });
+      } else {
+        window.addEventListener("deviceorientation", onOrientation);
+        window.addEventListener("devicemotion", onMotion);
+      }
+    }
+
+    document.getElementById("btnCapteurs").addEventListener("click", activerCapteurs);
   </script>
 </body>
 </html>
