@@ -16,6 +16,10 @@
     .erreur { color: #b00; }
     button { padding: 8px 14px; margin-right: 8px; }
     a { display: inline-block; margin-top: 16px; }
+    #terrain { position: relative; width: 100%; max-width: 320px; height: 320px;
+               border: 2px solid #888; border-radius: 6px; background: #eef; overflow: hidden; }
+    #balle { position: absolute; width: 30px; height: 30px; border-radius: 50%;
+             background: #c0392b; left: 145px; top: 145px; }
   </style>
 </head>
 <body>
@@ -39,6 +43,10 @@
 
   <h3>Mouvement (DeviceMotion)</h3>
   <div class="bloc" id="blocMotion">En attente...</div>
+
+  //balle qui suit les mouvements du téléphone, mise en application pompée sur la doc MDN
+  <h3>Balle qui suit l'inclinaison</h3>
+  <div id="terrain"><div id="balle"></div></div>
 
   <a href="../">Retour</a>
 
@@ -132,6 +140,20 @@
       return html + "</table>";
     }
 
+    const terrain = document.getElementById("terrain");
+    const balle = document.getElementById("balle");
+
+    function deplacerBalle(beta, gamma) {
+      if (beta === null || gamma === null) return;
+      const maxX = terrain.clientWidth - balle.offsetWidth;
+      const maxY = terrain.clientHeight - balle.offsetHeight;
+      // on limite l'inclinaison prise en compte à +/- 45° puis on ramène sur [0, max]
+      let x = (Math.max(-45, Math.min(45, gamma)) + 45) / 90 * maxX;
+      let y = (Math.max(-45, Math.min(45, beta)) + 45) / 90 * maxY;
+      balle.style.left = x + "px";
+      balle.style.top = y + "px";
+    }
+
     function onOrientation(e) {
       // alpha : rotation autour de l'axe z (boussole), beta : avant/arrière, gamma : gauche/droite
       blocOrientation.innerHTML = tableau([
@@ -140,6 +162,7 @@
         ["gamma (°)", num(e.gamma)],
         ["absolue ?", e.absolute]
       ]);
+      deplacerBalle(e.beta, e.gamma);
     }
 
     function onMotion(e) {
