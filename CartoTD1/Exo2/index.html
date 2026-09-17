@@ -27,8 +27,8 @@
 
   <script>
     const NICE = [43.7102, 7.2620];
+    const MARSEILLE = [43.2965, 5.3698];
 
-    // Triangle des Bermudes : Miami / Bermudes / San Juan
     const BERMUDES = [
       [25.7617, -80.1918], // Miami
       [32.3078, -64.7505], // Bermudes
@@ -42,7 +42,6 @@
       attribution: "&copy; OpenStreetMap"
     }).addTo(carte);
 
-    // Token Stadiamaps fourni par le prof, pour un fond de carte "stamen" alternatif
     const STADIA_KEY = "eed6a6b4-d171-43e4-8215-e5f8490b4245";
 
     const fondStamen = L.tileLayer(
@@ -63,16 +62,61 @@
 
     L.polygon(BERMUDES, { color: "red" }).addTo(carte).bindPopup("Triangle des Bermudes");
 
+    function distanceKm([lat1, lon1], [lat2, lon2]) {
+      const R = 6371; // rayon terrestre moyen en km
+      const toRad = deg => deg * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    L.polyline([MARSEILLE, NICE], { color: "blue", dashArray: "6 6" }).addTo(carte)
+      .bindPopup("Marseille - Nice : " + distanceKm(MARSEILLE, NICE).toFixed(1) + " km");
+
+    fetch("https://geo.api.gouv.fr/communes/06088?format=geojson&geometry=contour")
+      .then(r => r.json())
+      .then(geojson => {
+        L.geoJSON(geojson, { style: { color: "green", weight: 2, fillOpacity: 0.1 } })
+          .addTo(carte)
+          .bindPopup("Contour de Nice (GeoJSON, geo.api.gouv.fr)");
+      })
+      .catch(() => console.warn("GeoJSON commune de Nice indisponible."));
+
+    const urlOSRM = "https://router.project-osrm.org/route/v1/driving/"
+      + NICE[1] + "," + NICE[0] + ";" + MARSEILLE[1] + "," + MARSEILLE[0]
+      + "?overview=full&geometries=geojson";
+
+    fetch(urlOSRM)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.routes || !data.routes.length) return;
+        const trajet = data.routes[0];
+        L.geoJSON(trajet.geometry, { style: { color: "orange", weight: 4 } })
+          .addTo(carte)
+          .bindPopup("Trajet Nice - Marseille : " + (trajet.distance / 1000).toFixed(1)
+            + " km, " + Math.round(trajet.duration / 60) + " min");
+      })
+      .catch(() => console.warn("Itinéraire OSRM indisponible."));
+
     const statut = document.getElementById("statut");
 
     function afficherMaPosition(position) {
-      const { latitude, longitude } = position.coords;
+      const { latitude, longitude, accuracy } = position.coords;
       const moi = [latitude, longitude];
 
       carte.setView(moi, 13);
       L.marker(moi).addTo(carte).bindPopup("Ma position").openPopup();
 
-      statut.innerHTML = "Position trouvée.";
+      L.circle(moi, {
+        radius: accuracy,
+        color: "#3388ff",
+        fillOpacity: 0.15
+      }).addTo(carte).bindPopup("Précision estimée : " + accuracy.toFixed(0) + " m");
+
+      statut.innerHTML = "Position trouvée. Distance à Marseille : "
+        + distanceKm(moi, MARSEILLE).toFixed(1) + " km.";
     }
 
     function erreurPosition(err) {
