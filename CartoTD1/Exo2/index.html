@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TD1 - Exo2 : Leaflet et géolocalisation</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; background: #fafafa; }
+    h1 { font-size: 1.3rem; }
+    .bloc { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+    .erreur { color: #b00; }
+    #carte { width: 100%; max-width: 900px; height: 500px; border: 2px solid #888; border-radius: 6px; }
+    a { display: inline-block; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Exercice 2 - Leaflet et sa propre géolocalisation</h1>
+  <div class="bloc" id="statut">Recherche de la position...</div>
+
+  <div id="carte"></div>
+
+  <a href="../">Retour</a>
+
+  <script>
+    const NICE = [43.7102, 7.2620];
+
+    // Triangle des Bermudes : Miami / Bermudes / San Juan
+    const BERMUDES = [
+      [25.7617, -80.1918], // Miami
+      [32.3078, -64.7505], // Bermudes
+      [18.4655, -66.1057]  // San Juan
+    ];
+
+    const carte = L.map("carte").setView(NICE, 8);
+
+    const fondOSM = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(carte);
+
+    // Token Stadiamaps fourni par le prof, pour un fond de carte "stamen" alternatif
+    const STADIA_KEY = "eed6a6b4-d171-43e4-8215-e5f8490b4245";
+
+    const fondStamen = L.tileLayer(
+      "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg?api_key=" + STADIA_KEY,
+      {
+        maxZoom: 16,
+        attribution: "&copy; Stadia Maps, &copy; Stamen Design, &copy; OpenStreetMap"
+      }
+    );
+
+    L.control.layers({
+      "OpenStreetMap": fondOSM,
+      "Stamen Watercolor": fondStamen
+    }).addTo(carte);
+
+  
+    L.marker(NICE).addTo(carte).bindPopup("Nice (centre ville)");
+
+    L.polygon(BERMUDES, { color: "red" }).addTo(carte).bindPopup("Triangle des Bermudes");
+
+    const statut = document.getElementById("statut");
+
+    function afficherMaPosition(position) {
+      const { latitude, longitude } = position.coords;
+      const moi = [latitude, longitude];
+
+      carte.setView(moi, 13);
+      L.marker(moi).addTo(carte).bindPopup("Ma position").openPopup();
+
+      statut.innerHTML = "Position trouvée.";
+    }
+
+    function erreurPosition(err) {
+      statut.innerHTML = "<span class='erreur'>Géolocalisation indisponible (erreur "
+        + err.code + "). Carte centrée sur Nice par défaut.</span>";
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(afficherMaPosition, erreurPosition, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      });
+    } else {
+      statut.innerHTML = "<span class='erreur'>La géolocalisation n'est pas supportée par ce navigateur.</span>";
+    }
+  </script>
+</body>
+</html>
