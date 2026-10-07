@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TD2 - Exo1 : Three.js</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    a { position: absolute; top: 8px; left: 8px; color: #fff; font-family: Arial, sans-serif; z-index: 10; }
+  </style>
+</head>
+<body>
+  <a href="../">Retour</a>
+  <button id="btnCapteurs" style="position:absolute; top:8px; right:8px; z-index:10; padding:8px 14px;">
+    Activer les capteurs du smartphone
+  </button>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      75, window.innerWidth / window.innerHeight, 0.1, 1000
+    );
+    camera.position.z = 3;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const nbGouttes = 2000;
+    const positionsGouttes = new Float32Array(nbGouttes * 3);
+    for (let i = 0; i < nbGouttes; i++) {
+      positionsGouttes[i * 3] = (Math.random() - 0.5) * 10;     // x
+      positionsGouttes[i * 3 + 1] = Math.random() * 10;          // y
+      positionsGouttes[i * 3 + 2] = (Math.random() - 0.5) * 10;  // z
+    }
+    const geometrieGouttes = new THREE.BufferGeometry();
+    geometrieGouttes.setAttribute("position", new THREE.BufferAttribute(positionsGouttes, 3));
+
+    const textureGoutte = new THREE.TextureLoader().load("bucket.png");
+    const pluie = new THREE.Points(
+      geometrieGouttes,
+      new THREE.PointsMaterial({
+        map: textureGoutte,
+        size: 0.3,
+        transparent: true,
+        depthWrite: false
+      })
+    );
+    scene.add(pluie);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 2.5));
+
+    function creerTextureDamier() {
+      const taille = 128;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = taille;
+      const ctx = canvas.getContext("2d");
+      const cases = 8;
+      const pas = taille / cases;
+      for (let y = 0; y < cases; y++) {
+        for (let x = 0; x < cases; x++) {
+          ctx.fillStyle = (x + y) % 2 === 0 ? "#c0392b" : "#f5d6a8";
+          ctx.fillRect(x * pas, y * pas, pas, pas);
+        }
+      }
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    }
+
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ map: creerTextureDamier() })
+    );
+    scene.add(cube);
+    cube.position.x = -1.2;
+
+    let monModele = null;
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      "models/mon_modele.glb",
+      (gltf) => {
+        monModele = gltf.scene;
+        scene.add(monModele);
+
+        const boite = new THREE.Box3().setFromObject(monModele);
+        const taille = boite.getSize(new THREE.Vector3());
+        const centre = boite.getCenter(new THREE.Vector3());
+        const dimensionMax = Math.max(taille.x, taille.y, taille.z) || 1;
+
+        monModele.scale.setScalar(1 / dimensionMax);
+        monModele.position.sub(centre.multiplyScalar(1 / dimensionMax));
+        monModele.position.x += 1.2;
+        monModele.rotation.y = -Math.PI / 2; // quart de tour sur la droite parce que pas droit
+
+        camera.position.set(1.2, 0, 3);
+        camera.lookAt(1.2, 0, 0);
+      },
+      undefined,
+      (erreur) => console.error("Erreur de chargement du modèle glTF :", erreur)
+    );
+
+    // Redimensionnement de la fenêtre
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    let inclinaisonBeta = 0;
+    let inclinaisonGamma = 0;
+    let accelerationZ = 0;
+
+    function onOrientation(e) {
+      inclinaisonBeta = e.beta || 0;
+      inclinaisonGamma = e.gamma || 0;
+    }
+
+    function onMotion(e) {
+      const ag = e.accelerationIncludingGravity || {};
+      accelerationZ = ag.z || 0;
+    }
+
+    function activerCapteurs() {
+      const besoinPermission = typeof DeviceOrientationEvent !== "undefined"
+        && typeof DeviceOrientationEvent.requestPermission === "function";
+
+      if (besoinPermission) {
+        DeviceOrientationEvent.requestPermission().then((reponse) => {
+          if (reponse === "granted") window.addEventListener("deviceorientation", onOrientation);
+        });
+        DeviceMotionEvent.requestPermission().then((reponse) => {
+          if (reponse === "granted") window.addEventListener("devicemotion", onMotion);
+        });
+      } else {
+        window.addEventListener("deviceorientation", onOrientation);
+        window.addEventListener("devicemotion", onMotion);
+      }
+    }
+    document.getElementById("btnCapteurs").addEventListener("click", activerCapteurs);
+
+    function animerPluie() {
+      const positions = geometrieGouttes.attributes.position.array;
+      for (let i = 0; i < nbGouttes; i++) {
+        positions[i * 3 + 1] -= 0.015; // chute
+        if (positions[i * 3 + 1] < -2) positions[i * 3 + 1] = 10; // on relance en haut
+      }
+      geometrieGouttes.attributes.position.needsUpdate = true;
+    }
+
+    function animate() {
+      // pas de capteurs = rotation automatique
+      cube.rotation.x += THREE.MathUtils.degToRad(inclinaisonBeta) * 0.05 + 0.01;
+      cube.rotation.y += THREE.MathUtils.degToRad(inclinaisonGamma) * 0.05 + 0.01;
+      cube.position.y = THREE.MathUtils.clamp(accelerationZ * 0.05, -1, 1);
+      if (monModele) {
+        monModele.rotation.x += THREE.MathUtils.degToRad(inclinaisonBeta) * 0.05 + 0.01;
+        monModele.rotation.y += THREE.MathUtils.degToRad(inclinaisonGamma) * 0.05 + 0.01;
+      }
+      animerPluie();
+      renderer.render(scene, camera);
+    }
+    renderer.setAnimationLoop(animate);
+  </script>
+</body>
+</html>
