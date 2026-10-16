@@ -4,9 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TD3 - Exo1 : Géolocalisation et 3D</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
-    body { margin: 0; overflow: hidden; background: #000; }
+    body { margin: 0; overflow: hidden; background: #000; display: flex; height: 100vh; }
     a { position: absolute; top: 8px; left: 8px; color: #fff; font-family: Arial, sans-serif; z-index: 10; }
+    #carteLeaflet { width: 40%; height: 100%; }
+    #vue3D { width: 60%; height: 100%; position: relative; }
   </style>
 </head>
 <body>
@@ -14,6 +19,12 @@
   <div id="statut" style="position:absolute; top:8px; right:8px; z-index:10; color:#fff; font-family:Arial, sans-serif; background:#0008; padding:6px 10px; border-radius:4px;">
     Recherche de la position...
   </div>
+  <button id="btnRotation" style="position:absolute; top:44px; right:8px; z-index:10; padding:6px 10px;">
+    Relancer la rotation
+  </button>
+
+  <div id="carteLeaflet"></div>
+  <div id="vue3D"></div>
 
   <script type="importmap">
     {
@@ -27,16 +38,18 @@
   <script type="module">
     import * as THREE from "three";
 
+    const conteneur3D = document.getElementById("vue3D");
+
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(
-      75, window.innerWidth / window.innerHeight, 0.1, 1000
+      75, conteneur3D.clientWidth / conteneur3D.clientHeight, 0.1, 1000
     );
     camera.position.z = 3;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    renderer.setSize(conteneur3D.clientWidth, conteneur3D.clientHeight);
+    conteneur3D.appendChild(renderer.domElement);
 
     scene.add(new THREE.AmbientLight(0xffffff, 2));
 
@@ -89,43 +102,127 @@
       statut.textContent = "La géolocalisation n'est pas supportée par ce navigateur.";
     }
 
-    const pays = [
-      { code: "fr", lat: 48.8566, lon: 2.3522 },
-      { code: "us", lat: 38.9072, lon: -77.0369 },
-      { code: "jp", lat: 35.6762, lon: 139.6503 },
-      { code: "br", lat: -15.7939, lon: -47.8828 },
-      { code: "au", lat: -35.2809, lon: 149.1300 },
-      { code: "eg", lat: 30.0444, lon: 31.2357 }
+    const CLE_API_RESTCOUNTRIES = "rc_live_e4202a7ad1a7455ead2a6a255887764a";
+    const codesAlpha3 = [
+      "FRA", "USA", "JPN", "BRA", "AUS", "EGY",
+      "CAN", "DEU", "GBR", "ITA", "ESP", "IND",
+      "CHN", "RUS", "ZAF", "MEX", "ARG", "KOR"
     ];
-
     const chargeurTexture = new THREE.TextureLoader();
-    for (const p of pays) {
+
+    const drapeaux = [];
+
+    function placerDrapeau(lat, lon, urlImage) {
       const drapeau = new THREE.Mesh(
         new THREE.PlaneGeometry(0.15, 0.1),
         new THREE.MeshBasicMaterial({
-          map: chargeurTexture.load("https://flagcdn.com/w320/" + p.code + ".png"),
+          map: chargeurTexture.load(urlImage),
           side: THREE.DoubleSide,
           transparent: true
         })
       );
-
-      const position = latLonVersCartesien(p.lat, p.lon, 1.05);
+      const position = latLonVersCartesien(lat, lon, 1.05);
       drapeau.position.copy(position);
       drapeau.lookAt(position.clone().multiplyScalar(2));
+      drapeau.userData = { lat, lon };
       terre.add(drapeau);
+      drapeaux.push(drapeau);
     }
 
+    function attendre(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function recupererPays(code) {
+      const cle = "paysV2_" + code;
+      const enCache = localStorage.getItem(cle);
+      if (enCache) return JSON.parse(enCache);
+
+      const reponse = await fetch(
+        "https://api.restcountries.com/countries/v5/code?q=" + code
+          + "&limit=1&response_fields=coordinates.lat,coordinates.lng,codes.alpha_2",
+        { headers: { Authorization: "Bearer " + CLE_API_RESTCOUNTRIES } }
+      ).then((r) => r.json());
+
+      const pays = reponse.data?.objects?.[0];
+      if (pays) localStorage.setItem(cle, JSON.stringify(pays));
+      return pays;
+    }
+
+    async function chargerLesPays() {
+      for (const code of codesAlpha3) {
+        try {
+          const pays = await recupererPays(code);
+          if (pays) {
+            const urlDrapeau = "https://flagcdn.com/w320/" + pays.codes.alpha_2.toLowerCase() + ".png";
+            placerDrapeau(pays.coordinates.lat, pays.coordinates.lng, urlDrapeau);
+          }
+        } catch {
+          console.warn("Impossible de récupérer le pays " + code + " via api.restcountries.com.");
+        }
+        await attendre(600);
+      }
+    }
+    chargerLesPays();
+
     window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = conteneur3D.clientWidth / conteneur3D.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(conteneur3D.clientWidth, conteneur3D.clientHeight);
+    });
+
+    let rotationAuto = true;
+
+    document.getElementById("btnRotation").addEventListener("click", () => {
+      rotationAuto = true;
     });
 
     function animate() {
-      terre.rotation.y += 0.002;
+      if (rotationAuto) terre.rotation.y += 0.002;
       renderer.render(scene, camera);
     }
     renderer.setAnimationLoop(animate);
+
+    const carteLeaflet = L.map("carteLeaflet").setView([20, 0], 2);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(carteLeaflet);
+
+    carteLeaflet.on("click", (e) => {
+      rotationAuto = false;
+      const { lat, lng } = e.latlng;
+      const cible = latLonVersCartesien(lat, lng, 1).normalize();
+      const face = new THREE.Vector3(0, 0, 1);
+      terre.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(cible, face));
+    });
+
+    function cartesienVersLatLon(pointLocal) {
+      const r = pointLocal.length();
+      const phi = Math.acos(pointLocal.y / r);
+      const theta = Math.atan2(pointLocal.z, -pointLocal.x);
+      return {
+        lat: 90 - phi * (180 / Math.PI),
+        lon: theta * (180 / Math.PI) - 180
+      };
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const souris = new THREE.Vector2();
+
+    renderer.domElement.addEventListener("click", (e) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      souris.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      souris.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(souris, camera);
+      const intersections = raycaster.intersectObject(terre);
+      if (intersections.length > 0) {
+        const pointLocal = terre.worldToLocal(intersections[0].point.clone());
+        const { lat, lon } = cartesienVersLatLon(pointLocal);
+        carteLeaflet.setView([lat, lon], 6);
+      }
+    });
   </script>
 </body>
 </html>
