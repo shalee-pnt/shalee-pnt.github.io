@@ -218,6 +218,7 @@
       raycaster.setFromCamera(souris, camera);
       const intersections = raycaster.intersectObject(terre);
       if (intersections.length > 0) {
+        rotationAuto = false;
         const pointLocal = terre.worldToLocal(intersections[0].point.clone());
         const { lat, lon } = cartesienVersLatLon(pointLocal);
         carteLeaflet.setView([lat, lon], 6);
