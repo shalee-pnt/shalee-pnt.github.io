@@ -56,7 +56,12 @@
       }
       statut.textContent = "Chargement du modèle IA (peut prendre un moment sur mobile)...";
       try {
-        const detecteur = ml5.handPose(() => {
+        const options = { runtime: "mediapipe", modelType: "lite", maxHands: 1 };
+        const detecteur = ml5.handPose(options, (_, erreur) => {
+          if (erreur) {
+            statut.textContent = "Erreur de chargement du modèle : " + erreur.message;
+            return;
+          }
           detecteur.detectStart(video, (resultats) => {
             mains = resultats;
           });
