@@ -168,6 +168,7 @@
     const ZOOM_MIN = 1.6;
     const ZOOM_MAX = 4.5;
     let distanceCible = camera.position.z;
+    let ouvertureMesuree = null;
 
     function distance(a, b) {
       return Math.hypot(a.x - b.x, a.y - b.y);
@@ -177,7 +178,8 @@
       const points = mains[0].keypoints;
       const ecartPouceIndex = distance(points[4], points[8]);
       const tailleMain = distance(points[0], points[9]);
-      const ouverture = THREE.MathUtils.clamp(ecartPouceIndex / tailleMain, 0.15, 1);
+      ouvertureMesuree = ecartPouceIndex / tailleMain;
+      const ouverture = THREE.MathUtils.clamp(ouvertureMesuree, 0.15, 1);
 
       distanceCible = THREE.MathUtils.mapLinear(ouverture, 0.15, 1, ZOOM_MIN, ZOOM_MAX);
     }
@@ -235,9 +237,20 @@
           ctx.fillStyle = "#00ff88";
           ctx.fill();
         }
+        const pouce = main.keypoints[4];
+        const index = main.keypoints[8];
+        ctx.beginPath();
+        ctx.moveTo(pouce.x, pouce.y);
+        ctx.lineTo(index.x, index.y);
+        ctx.strokeStyle = "#ff3333";
+        ctx.lineWidth = 6;
+        ctx.stroke();
       }
 
-      statut.textContent = "Mains détectées : " + mains.length;
+      statut.textContent = "Mains : " + mains.length
+        + (mains.length > 0 && ouvertureMesuree !== null
+          ? " | ouverture : " + ouvertureMesuree.toFixed(2) + " | zoom : " + camera.position.z.toFixed(2)
+          : "");
       requestAnimationFrame(dessinerMains);
     }
   </script>
