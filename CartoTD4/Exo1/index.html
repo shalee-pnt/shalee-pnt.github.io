@@ -50,11 +50,21 @@
     let mains = [];
 
     function demarrerDetection() {
-      const detecteur = ml5.handPose();
-      detecteur.detectStart(video, (resultats) => {
-        mains = resultats;
-      });
-      statut.textContent = "Mains détectées : 0";
+      if (typeof ml5 === "undefined") {
+        statut.textContent = "ml5.js n'a pas pu se charger (22 Mo, vérifie ta connexion).";
+        return;
+      }
+      statut.textContent = "Chargement du modèle IA (peut prendre un moment sur mobile)...";
+      try {
+        const detecteur = ml5.handPose(() => {
+          statut.textContent = "Mains détectées : 0";
+        });
+        detecteur.detectStart(video, (resultats) => {
+          mains = resultats;
+        });
+      } catch (err) {
+        statut.textContent = "Erreur ml5.js : " + err.message;
+      }
       dessiner();
     }
 
