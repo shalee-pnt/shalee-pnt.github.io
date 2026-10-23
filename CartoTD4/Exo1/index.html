@@ -143,18 +143,38 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    function animate() {
-      terre.rotation.y += 0.002;
-      renderer.render(scene, camera);
-    }
-    renderer.setAnimationLoop(animate);
-
     const statut = document.getElementById("statut");
     const video = document.getElementById("webcam");
     const canvas = document.getElementById("overlay");
     const ctx = canvas.getContext("2d");
 
     let mains = [];
+    let positionPrecedente = null;
+    const SENSIBILITE = 4;
+
+    function tournerAvecLaMain() {
+      const centreMain = mains[0].keypoints[9];
+      const x = centreMain.x / video.videoWidth;
+      const y = centreMain.y / video.videoHeight;
+
+      if (positionPrecedente) {
+        terre.rotation.y -= (x - positionPrecedente.x) * SENSIBILITE;
+        terre.rotation.x += (y - positionPrecedente.y) * SENSIBILITE;
+        terre.rotation.x = THREE.MathUtils.clamp(terre.rotation.x, -Math.PI / 2, Math.PI / 2);
+      }
+      positionPrecedente = { x, y };
+    }
+
+    function animate() {
+      if (mains.length > 0) {
+        tournerAvecLaMain();
+      } else {
+        positionPrecedente = null;
+        terre.rotation.y += 0.002;
+      }
+      renderer.render(scene, camera);
+    }
+    renderer.setAnimationLoop(animate);
 
     navigator.mediaDevices.getUserMedia({ video: true })
       .then((flux) => {
