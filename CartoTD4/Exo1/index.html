@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TD4 - Exo1 : Contrôle gestuel</title>
+  <script src="https://unpkg.com/ml5@1/dist/ml5.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+    a { position: absolute; top: 8px; left: 8px; color: #fff; z-index: 10; }
+    #statut { position: absolute; top: 8px; right: 8px; color: #fff; background: #0008; padding: 6px 10px; border-radius: 4px; z-index: 10; }
+    #scene { position: relative; width: 100vw; height: 100vh; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+    video { transform: scaleX(-1); }
+    canvas { transform: scaleX(-1); }
+  </style>
+</head>
+<body>
+  <a href="../">Retour</a>
+  <div id="statut">Démarrage de la caméra...</div>
+
+  <div id="scene">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <script>
+    const statut = document.getElementById("statut");
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+
+    function ajusterTaille() {
+      canvas.width = video.videoWidth || window.innerWidth;
+      canvas.height = video.videoHeight || window.innerHeight;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((flux) => {
+        video.srcObject = flux;
+        video.addEventListener("loadedmetadata", () => {
+          ajusterTaille();
+          demarrerDetection();
+        });
+      })
+      .catch((err) => {
+        statut.textContent = "Caméra indisponible : " + err.message;
+      });
+
+    let mains = [];
+
+    function demarrerDetection() {
+      const detecteur = ml5.handPose();
+      detecteur.detectStart(video, (resultats) => {
+        mains = resultats;
+      });
+      statut.textContent = "Mains détectées : 0";
+      dessiner();
+    }
+
+    function dessiner() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const main of mains) {
+        for (const point of main.keypoints) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+          ctx.fillStyle = "#00ff88";
+          ctx.fill();
+        }
+      }
+
+      statut.textContent = "Mains détectées : " + mains.length;
+      requestAnimationFrame(dessiner);
+    }
+  </script>
+</body>
+</html>
