@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TD4 - Exo1 : Contrôle gestuel</title>
+  <title>TD4 - Exo1 : Contrôle gestuel et vocal</title>
   <script src="https://unpkg.com/ml5@1/dist/ml5.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
@@ -11,11 +11,25 @@
     #statut { position: absolute; top: 8px; right: 8px; color: #fff; background: #0008; padding: 6px 10px; border-radius: 4px; z-index: 10; }
     #apercu { position: absolute; bottom: 8px; right: 8px; width: 160px; height: 120px; border: 2px solid #fff; border-radius: 6px; overflow: hidden; z-index: 10; }
     #apercu video, #apercu canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; transform: scaleX(-1); }
+    #commandeVocale { position: absolute; bottom: 8px; left: 8px; z-index: 10; display: flex; flex-direction: column; gap: 6px; max-width: calc(100vw - 190px); }
+    #commandeVocale form { display: flex; gap: 6px; }
+    #commandeVocale input { flex: 1; min-width: 0; padding: 8px; }
+    #commandeVocale button { padding: 8px 12px; }
+    #messageVoix { color: #fff; background: #0008; padding: 6px 10px; border-radius: 4px; }
   </style>
 </head>
 <body>
   <a href="../">Retour</a>
   <div id="statut">Démarrage de la caméra...</div>
+
+  <div id="commandeVocale">
+    <div id="messageVoix">Dis un pays (ex : « Japon »)</div>
+    <button id="btnMicro">🎤 Parler</button>
+    <form id="formPays">
+      <input id="champPays" type="text" placeholder="ou tape un pays">
+      <button type="submit">Aller</button>
+    </form>
+  </div>
 
   <div id="apercu">
     <video id="webcam" autoplay playsinline muted></video>
@@ -85,6 +99,7 @@
       "CHN", "RUS", "ZAF", "MEX", "ARG", "KOR"
     ];
     const chargeurTexture = new THREE.TextureLoader();
+    const coordonneesPays = {};
 
     function placerDrapeau(lat, lon, urlImage) {
       const drapeau = new THREE.Mesh(
@@ -126,6 +141,7 @@
         try {
           const pays = await recupererPays(code);
           if (pays) {
+            coordonneesPays[code] = { lat: pays.coordinates.lat, lon: pays.coordinates.lng };
             const urlDrapeau = "https://flagcdn.com/w320/" + pays.codes.alpha_2.toLowerCase() + ".png";
             placerDrapeau(pays.coordinates.lat, pays.coordinates.lng, urlDrapeau);
           }
@@ -182,18 +198,144 @@
       distanceCible = THREE.MathUtils.mapLinear(ouverture, 0.15, 1, ZOOM_MAX, ZOOM_MIN);
     }
 
+    let cibleRotation = null;
+    let rotationEnPause = false;
+
+    function allerVers(lat, lon) {
+      const point = latLonVersCartesien(lat, lon, 1);
+      cibleRotation = {
+        x: THREE.MathUtils.degToRad(lat),
+        y: -Math.atan2(point.x, point.z)
+      };
+      distanceCible = 2;
+    }
+
+    function ecartAngle(depart, arrivee) {
+      return THREE.MathUtils.euclideanModulo(arrivee - depart + Math.PI, Math.PI * 2) - Math.PI;
+    }
+
+    function tournerVersLaCible() {
+      const dx = ecartAngle(terre.rotation.x, cibleRotation.x);
+      const dy = ecartAngle(terre.rotation.y, cibleRotation.y);
+      terre.rotation.x += dx * 0.08;
+      terre.rotation.y += dy * 0.08;
+
+      if (Math.abs(dx) < 0.005 && Math.abs(dy) < 0.005) {
+        cibleRotation = null;
+        rotationEnPause = true;
+      }
+    }
+
     function animate() {
-      if (mains.length > 0) {
+      if (cibleRotation) {
+        positionPrecedente = null;
+        tournerVersLaCible();
+      } else if (mains.length > 0) {
+        rotationEnPause = false;
         tournerAvecLaMain();
         zoomerAvecLePincement();
       } else {
         positionPrecedente = null;
-        terre.rotation.y += 0.002;
+        if (!rotationEnPause) terre.rotation.y += 0.002;
       }
       camera.position.z = THREE.MathUtils.lerp(camera.position.z, distanceCible, 0.1);
       renderer.render(scene, camera);
     }
     renderer.setAnimationLoop(animate);
+
+    const nomsPays = {
+      FRA: ["france"],
+      USA: ["etats-unis", "etats unis", "amerique", "usa"],
+      JPN: ["japon"],
+      BRA: ["bresil"],
+      AUS: ["australie"],
+      EGY: ["egypte"],
+      CAN: ["canada"],
+      DEU: ["allemagne"],
+      GBR: ["royaume-uni", "royaume uni", "angleterre", "grande-bretagne", "grande bretagne"],
+      ITA: ["italie"],
+      ESP: ["espagne"],
+      IND: ["inde"],
+      CHN: ["chine"],
+      RUS: ["russie"],
+      ZAF: ["afrique du sud"],
+      MEX: ["mexique"],
+      ARG: ["argentine"],
+      KOR: ["coree du sud", "coree"]
+    };
+
+    const messageVoix = document.getElementById("messageVoix");
+
+    function normaliser(texte) {
+      return texte.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+    }
+
+    function trouverPays(texte) {
+      const phrase = " " + normaliser(texte) + " ";
+      for (const [code, noms] of Object.entries(nomsPays)) {
+        if (noms.some((nom) => phrase.includes(" " + nom + " "))) return code;
+      }
+      return null;
+    }
+
+    function traiterDemande(texte) {
+      const code = trouverPays(texte);
+      if (!code) {
+        messageVoix.textContent = "« " + texte + " » : pays non reconnu.";
+        return;
+      }
+      const coords = coordonneesPays[code];
+      if (!coords) {
+        messageVoix.textContent = "Les données de ce pays ne sont pas encore chargées, réessaie dans un instant.";
+        return;
+      }
+      messageVoix.textContent = "Direction " + nomsPays[code][0] + " !";
+      allerVers(coords.lat, coords.lon);
+    }
+
+    document.getElementById("formPays").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const champ = document.getElementById("champPays");
+      if (champ.value.trim()) traiterDemande(champ.value);
+      champ.value = "";
+    });
+
+    const btnMicro = document.getElementById("btnMicro");
+    const Reconnaissance = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!Reconnaissance) {
+      btnMicro.style.display = "none";
+      messageVoix.textContent = "Reconnaissance vocale non supportée ici : tape un pays.";
+    } else {
+      const reconnaissance = new Reconnaissance();
+      reconnaissance.lang = "fr-FR";
+      reconnaissance.interimResults = false;
+      reconnaissance.maxAlternatives = 3;
+
+      reconnaissance.addEventListener("result", (e) => {
+        const alternatives = Array.from(e.results[0]).map((alt) => alt.transcript);
+        const comprise = alternatives.find((texte) => trouverPays(texte)) || alternatives[0];
+        traiterDemande(comprise);
+      });
+
+      reconnaissance.addEventListener("error", (e) => {
+        messageVoix.textContent = "Erreur micro : " + e.error;
+      });
+
+      reconnaissance.addEventListener("end", () => {
+        btnMicro.textContent = "🎤 Parler";
+      });
+
+      btnMicro.addEventListener("click", () => {
+        messageVoix.textContent = "Je t'écoute...";
+        btnMicro.textContent = "🎙️ ...";
+        try {
+          reconnaissance.start();
+        } catch {
+          reconnaissance.stop();
+        }
+      });
+    }
 
     navigator.mediaDevices.getUserMedia({ video: true })
       .then((flux) => {
