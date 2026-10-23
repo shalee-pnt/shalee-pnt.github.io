@@ -165,13 +165,32 @@
       positionPrecedente = { x, y };
     }
 
+    const ZOOM_MIN = 1.6;
+    const ZOOM_MAX = 4.5;
+    let distanceCible = camera.position.z;
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function zoomerAvecLePincement() {
+      const points = mains[0].keypoints;
+      const ecartPouceIndex = distance(points[4], points[8]);
+      const tailleMain = distance(points[0], points[9]);
+      const ouverture = THREE.MathUtils.clamp(ecartPouceIndex / tailleMain, 0.15, 1);
+
+      distanceCible = THREE.MathUtils.mapLinear(ouverture, 0.15, 1, ZOOM_MIN, ZOOM_MAX);
+    }
+
     function animate() {
       if (mains.length > 0) {
         tournerAvecLaMain();
+        zoomerAvecLePincement();
       } else {
         positionPrecedente = null;
         terre.rotation.y += 0.002;
       }
+      camera.position.z = THREE.MathUtils.lerp(camera.position.z, distanceCible, 0.1);
       renderer.render(scene, camera);
     }
     renderer.setAnimationLoop(animate);
