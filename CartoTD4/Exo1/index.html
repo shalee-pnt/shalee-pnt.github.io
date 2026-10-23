@@ -49,26 +49,20 @@
 
     let mains = [];
 
-    function demarrerDetection() {
+    async function demarrerDetection() {
       if (typeof ml5 === "undefined") {
         statut.textContent = "ml5.js n'a pas pu se charger (22 Mo, vérifie ta connexion).";
         return;
       }
       statut.textContent = "Chargement du modèle IA (peut prendre un moment sur mobile)...";
       try {
-        const options = { runtime: "mediapipe", modelType: "lite", maxHands: 1 };
-        const detecteur = ml5.handPose(options, (_, erreur) => {
-          if (erreur) {
-            statut.textContent = "Erreur de chargement du modèle : " + erreur.message;
-            return;
-          }
-          detecteur.detectStart(video, (resultats) => {
-            mains = resultats;
-          });
-          dessiner();
+        const detecteur = await ml5.handPose({ runtime: "mediapipe", modelType: "lite", maxHands: 1 });
+        detecteur.detectStart(video, (resultats) => {
+          mains = resultats;
         });
+        dessiner();
       } catch (err) {
-        statut.textContent = "Erreur ml5.js : " + err.message;
+        statut.textContent = "Erreur de chargement du modèle : " + err.message;
       }
     }
 
