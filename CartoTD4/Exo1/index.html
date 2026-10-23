@@ -189,7 +189,28 @@
       return Math.hypot(a.x - b.x, a.y - b.y);
     }
 
+    const SEUIL_MOUVEMENT = 0.01;
+    let mouvementMain = 0;
+    let dernierCentre = null;
+
+    function mesurerMouvementMain() {
+      if (mains.length === 0) {
+        dernierCentre = null;
+        mouvementMain = 0;
+        return;
+      }
+      const centre = mains[0].keypoints[9];
+      const x = centre.x / video.videoWidth;
+      const y = centre.y / video.videoHeight;
+      if (dernierCentre) {
+        const deplacement = Math.hypot(x - dernierCentre.x, y - dernierCentre.y);
+        mouvementMain = mouvementMain * 0.7 + deplacement * 0.3;
+      }
+      dernierCentre = { x, y };
+    }
+
     function zoomerAvecLePincement() {
+      if (mouvementMain > SEUIL_MOUVEMENT) return;
       const points = mains[0].keypoints;
       const ecartPouceIndex = distance(points[4], points[8]);
       const tailleMain = distance(points[0], points[9]);
@@ -360,6 +381,7 @@
         const detecteur = await ml5.handPose({ runtime: "mediapipe", modelType: "lite", maxHands: 1 });
         detecteur.detectStart(video, (resultats) => {
           mains = resultats;
+          mesurerMouvementMain();
         });
         dessinerMains();
       } catch (err) {
